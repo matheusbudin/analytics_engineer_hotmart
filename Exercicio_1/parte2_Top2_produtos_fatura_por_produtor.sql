@@ -1,3 +1,8 @@
+/*
+filtro antes de fazer o join: se for tabela pequena CTE, se for grande temp_tables
+ganho em performance de processamento
+Parte 1: Top 50 produtores em FATURAMENTO em 2021
+*/
 WITH revenue_by_producer_product AS (
     SELECT
         p.producer_id,

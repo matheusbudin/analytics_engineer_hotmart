@@ -114,7 +114,7 @@ Para ver o detalhamento do desenvolvimento, observe as seções após esta próx
 ## Entregáveis (Exercício 2)
 
 1) **ETL em Glue**: notebook `ETL-hotmart-completo.ipynb` (Bronze/Silver/Gold + DQ). 
-[DETL COMPLETO DEV/UAT](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/ETL-hotmart-completo.ipynb)
+[ETL COMPLETO DEV/UAT](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/ETL-hotmart-completo.ipynb)
 
 2) Create Table do dataset final - DDL:
 ```sql
@@ -143,7 +143,9 @@ TBLPROPERTIES ('spark.sql.sources.provider'='delta');
 
 3) **Dataset final**: `s3://data-lake-case-hotmart/gold/gmv_daily_by_subsidiary` (Delta).  
 ![Dataset final populado](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_dataset_final.png)
+
 - query no athena:
+
 ![query athena](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_query_athena_subsidiary_daily.png)
 
 4) Consulta SQL, em cima do dataset final, que retorna o GMV diário por subsidiária:

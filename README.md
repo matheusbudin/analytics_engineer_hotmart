@@ -160,6 +160,10 @@ WHERE is_current_snapshot = TRUE
 ORDER BY release_date, subsidiary;
 ```
 
+- resultado no spark Glue:
+
+![query entregável daily gmv Glue Spark](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_gmv_daily_subsidiary.png)
+
 5) Descrição STACK utilizada e arquitetura:
 ## Tech Stack Utilizada (Exercício 2)
 

@@ -1,216 +1,16 @@
-# CASE analytics_engineer_hotmart - Matheus Ribeiro Budin
-
-# Documentação — Exercício 1 (SQL)
-
-## Objetivo
-Responder às perguntas do Exercício 1 do PDF:
-
-1. **Top 50 produtores em faturamento em 2021**
-2. **Top 2 produtos que mais faturaram por produtor**
-
-> Regras aplicadas para resolução do exercício 1:
-- Considera apenas compras com **`release_date IS NOT NULL`** (pagamento/compra liberada).
-- Receita/GMV calculada como **`purchase_value * item_quantity`**.
-- Join `purchase` ↔ `product_item` usa **chave composta** `prod_item_id + prod_item_partition`.
-
----
-
-## `Quais são os 50 maiores produtores em faturamento ($) de 2021?`
-
-### O que a query faz
-1) Filtra as compras de 2021 (CTE `purchases_2021`) antes de juntar com `product_item` (reduz custo do join).  
-2) Junta com `product_item` por `prod_item_id` e `prod_item_partition`.  
-3) Agrega por `producer_id` e ordena por faturamento desc, retornando top 50.
-
-### Query SQL
-```sql
-/*
-filtro antes de fazer o join: se for tabela pequena CTE, se for grande temp_tables
-ganho em performance de processamento
-Parte 1: Top 50 produtores em FATURAMENTO em 2021
-*/
-WITH purchases_2021 AS (
-    SELECT
-        purchase_id,
-        producer_id,
-        prod_item_id,
-        prod_item_partition
-    FROM purchase
-    WHERE year(order_date) = 2021
-      AND release_date IS NOT NULL
-)
-SELECT
-    p.producer_id,
-    SUM(pi.purchase_value * pi.item_quantity) AS total_revenue
-FROM purchases_2021 p
-JOIN product_item pi
-  ON pi.prod_item_id = p.prod_item_id
- AND pi.prod_item_partition = p.prod_item_partition
-GROUP BY p.producer_id
-ORDER BY total_revenue DESC
-LIMIT 50;
-```
-
----
-
-## `Quais são os 2 produtos que mais faturaram ($) de cada produtor?`
-
-### O que a query faz
-1) Agrega faturamento por `(producer_id, product_id)`.  
-2) Rank por produtor com `ROW_NUMBER()` desc por faturamento.  
-3) Mantém somente os 2 primeiros por produtor.
-
-### Query:
-```sql
-/*
-filtro antes de fazer o join: se for tabela pequena CTE, se for grande temp_tables
-ganho em performance de processamento
-Parte 1: Top 50 produtores em FATURAMENTO em 2021
-*/
-WITH revenue_by_producer_product AS (
-    SELECT
-        p.producer_id,
-        pi.product_id,
-        SUM(pi.purchase_value * pi.item_quantity) AS product_revenue
-    FROM purchase p
-    JOIN product_item pi
-      ON pi.prod_item_id = p.prod_item_id
-     AND pi.prod_item_partition = p.prod_item_partition
-    WHERE p.release_date IS NOT NULL
-    GROUP BY p.producer_id, pi.product_id
-),
-ranked AS (
-    SELECT
-        producer_id,
-        product_id,
-        product_revenue,
-        ROW_NUMBER() OVER (
-            PARTITION BY producer_id
-            ORDER BY product_revenue DESC
-        ) AS rn
-    FROM revenue_by_producer_product
-)
-SELECT
-    producer_id,
-    product_id,
-    product_revenue
-FROM ranked
-WHERE rn <= 2
-ORDER BY producer_id, product_revenue DESC;
-```
-
----
------------
 # Documentação — Exercício 2 (ETL no AWS Glue / Delta Lake)
-Temos um notebook de desenvolvimento/uat que consolida todos os códigos para camada bronze, silver e gold. Entretanto, para produção é necessário seguir a dependências entre as tasks do orquestrador: AIRFLOW descritas na section de "Orquestração" no final do exercício 2.
 
-(OBS: todas as vezes que falarmos de "as-of" significa "“como os dados estavam até uma data de corte” — ou seja, a visão do mundo naquele dia, sem usar atualizações que chegaram depois.")
-
-Para ver o detalhamento do desenvolvimento, observe as seções após esta próxima de "Entregáveis do Ex2"
+Esta documentação descreve o ETL implementado no notebook **`ETL-hotmart-completo.ipynb`**, organizado em **Bronze → Silver → Gold**, e mapeia **explicitamente** onde cada pré-requisito do PDF é atendido.
 
 ---
----
----
-## Entregáveis (Exercício 2)
-
-1) **ETL em Glue**: notebook `ETL-hotmart-completo.ipynb` (Bronze/Silver/Gold + DQ). 
-[DETL COMPLETO DEV/UAT](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/ETL-hotmart-completo.ipynb)
-
-2) Create Table do dataset final - DDL:
-```sql
-CREATE EXTERNAL TABLE default.gold_gvm (
-  transaction_datetime timestamp,
-  purchase_id bigint,
-  buyer_id bigint,
-  prod_item_id bigint,
-  order_date date,
-  release_date date,
-  producer_id bigint,
-  product_id bigint,
-  item_quantity int,
-  purchase_value double,
-  subsidiary string,
-  snapshot_datetime timestamp,
-  is_current_snapshot boolean
-)
-PARTITIONED BY (
-  snapshot_date date,
-  transaction_date date
-)
-LOCATION 's3://data-lake-case-hotmart/gold/gvm/'
-TBLPROPERTIES ('spark.sql.sources.provider'='delta');
-```
-
-3) **Dataset final**: `s3://data-lake-case-hotmart/gold/gmv_daily_by_subsidiary` (Delta).  
-![Dataset final populado](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_dataset_final.png)
-
-4) Consulta SQL, em cima do dataset final, que retorna o GMV diário por subsidiária:
-```sql
-SELECT
-  release_date,
-  subsidiary,
-  gmv_value,
-  transaction_count
-FROM gold_gmv_daily_by_subsidiary
-WHERE is_current_snapshot = TRUE
-ORDER BY release_date, subsidiary;
-```
-
-5) Descrição STACK utilizada e arquitetura:
-## Tech Stack Utilizada (Exercício 2)
-
-| Camada / Item | Tecnologia | Onde entra na solução | Por que foi escolhida |
-|---|---|---|---|
-| Orquestração (PROPOSTO)| **Apache Airflow** (self-managed em Kubernetes ou **MWAA**) | DAG dispara Bronze (paralelo) → Silver (depende da Bronze correspondente) → Gold (depende de todas as Silvers estarem “up-to-date”) | Controle de dependências, retries, SLAs, observabilidade e portabilidade multi-cloud |
-| Processamento | **AWS Glue 5.0 (Apache Spark / PySpark)** | Execução dos notebooks/jobs Bronze/Silver/Gold | Escalável, serverless, integra com S3, suporta Delta Lake e jobs parametrizáveis |
-| Storage (Data Lake) | **Amazon S3** | Persistência das camadas `bronze/`, `silver/`, `gold/` | Storage barato e durável, padrão de data lake na AWS |
-| Formato de dados | **Delta Lake** | Tabelas Bronze/Silver/Gold em formato Delta (com `_delta_log`) | ACID no lake, suporte a upsert/merge, time travel e consistência de leitura/escrita |
-| Metadados / Catálogo | **AWS Glue Data Catalog** | Registro das tabelas Delta para descoberta e query | Centraliza schema, integra com Athena e governança |
-| Query / Consumo | **Amazon Athena (engine v3)** | Consultas SQL no dataset final (`gold_gmv_daily_by_subsidiary`) e snapshots (`gold_gvm`) | Serverless SQL, rápido para BI/analistas, integra com Glue Catalog |
-| Governança (PROPOSTO) | **AWS Lake Formation** | Controle de acesso (coluna/linha) e permissões em tabelas/catalog | Governança centralizada e segurança em nível de dados |
-| Observabilidade (PROPOSTO) | **CloudWatch Logs** + métricas DQ (Gold) | Logs do Glue/Airflow + tabelas `dq_gmv_run_metrics` e `quarantine_missing_items` | Auditoria, rastreabilidade e monitoramento de qualidade/atrasos |
-| Qualidade de Dados (PROPOSTO + exemplo PyDQ)| Checks no **Gold** + Quarentena | Quarentena de compras faturadas sem item + métricas por snapshot | Evita GMV incorreto, facilita troubleshooting e evidencia maturidade AE |
-| Deploy (PROPOSTO)| **GitHub** (repositório) + IaC opcional (Terraform/CDK) | Versionamento de notebooks, DAGs e DDLs | Reprodutibilidade, revisão e rastreabilidade de mudanças |
-
-
-extra) sql snapshot para "navegar no tempo" pelos snapshots consolidados da tabela
-- Nesse caso "Olhando para janeiro de 2022 consolidado com o último snapshot"
-```sql
-WITH last_snap AS (
-  SELECT max(snapshot_date) AS snapshot_date
-  FROM default.gold_gmv_daily_by_subsidiary
-)
-SELECT
-  release_date,
-  subsidiary,
-  gmv_value,
-  transaction_count
-FROM default.gold_gmv_daily_by_subsidiary
-WHERE snapshot_date = (SELECT snapshot_date FROM last_snap)
-  AND release_date >= DATE '2022-01-01'
-  AND release_date <  DATE '2022-02-01'
-ORDER BY release_date, subsidiary;
-```
-
----
----
----
-
-## Detalhamento Solução:
 
 ## 1) Visão geral do pipeline
-
-### Tech-stack desenho arquitetura proposta exemplo
-- Abaixo temos um exemplo de arquitetura proposta de delta lakehouse para atender a resolução deste case:
-![Desenho Infra e Arquitetura](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/data-infra-architecture.png)
 
 ### Tech stack
 - AWS Glue 5.0 (Spark / PySpark)
 - S3 como data lake
 - **Delta Lake** como formato (bronze/silver/gold)
-- Athena/Glue Catalog para consulta
-- Airflow como orquestrador
-- extra: Redshift como Data Warehouse
+- Athena/Glue Catalog para consulta (tabela Delta precisa estar catalogada corretamente)
 
 ### Estrutura no S3 (exemplo)
 - `s3://data-lake-case-hotmart/bronze/*`
@@ -219,7 +19,7 @@ ORDER BY release_date, subsidiary;
 
 ### Camadas
 - **Bronze**: eventos CDC (append-only), com `transaction_datetime`, `transaction_date`, `ingestion_date`.
-- **Silver**: deduplicação CDC + histórico + flag de “registro corrente” (**`is_current_record`**).
+- **Silver**: dedup CDC + histórico + flag de “registro corrente” (**`Is_current_record`**).
 - **Gold**: snapshots diários (`snapshot_date = D-1`) + `is_current_snapshot` + dataset final `gmv_daily_by_subsidiary`.
 
 ---
@@ -231,8 +31,8 @@ A Silver faz **rebuild** do dataset antes de gravar:
 1) lê Silver existente (se existir)
 2) lê Bronze incremental (por `ingestion_date > last_ingestion`)
 3) **union** (histórico + incremental)
-4) deduplicação CDC
-5) atualiza flag ao marcar como registro corrente
+4) dedup CDC
+5) marca registro corrente
 6) grava com `mode("overwrite")`
 
 > O histórico é preservado porque ele está dentro do union+dedup, e então é regravado.
@@ -280,8 +80,14 @@ df_purchase_bronze.write \
 ```
 
 ### 3.2 Silver (exemplo: purchase)
+> **Nota de nomenclatura:** no notebook aparece `is_current_record` (minúsculo).  
+> Para atender seu padrão final, renomeie para **`Is_current_record`** e ajuste as referências downstream.
 ```python
 # Silver (purchase): incremental por ingestion_date, union com silver existente, dedup CDC e flag de corrente
+# CELL 2
+# SILVER_PATH = "data_lake/silver/purchase"
+# BRONZE_PATH = "data_lake/bronze/purchase"
+
 # 1) Ler Silver atual (se existir)
 try:
     df_silver_current = spark.read.format("delta").load(PATH_SILVER_PURCHASE)
@@ -330,7 +136,7 @@ df_silver_dedup = (
 # 7) Registro corrente por purchase_id (renomeado)
 purchase_window = Window.partitionBy("purchase_id").orderBy(col("transaction_datetime").desc())
 
-df_purchase_silver_final = (
+df_silver_final = (
     df_silver_dedup
     .withColumn("rk", row_number().over(purchase_window))
     .withColumn("is_current_record", col("rk") == 1)   # renomeado (antes: is_latest)
@@ -338,7 +144,7 @@ df_purchase_silver_final = (
 )
 
 # 8) Escrita final (rebuild) - DELTA
-df_purchase_silver_final.write \
+df_silver_final.write \
     .format("delta") \
     .mode("overwrite") \
     .partitionBy("transaction_date") \
@@ -346,10 +152,11 @@ df_purchase_silver_final.write \
 ```
 
 ### 3.3 Gold (core + dataset final)
-
+> **Nota de nomenclatura:** o notebook já usa `is_current_snapshot`.  
+> Se existir `current_snapshot` legado, o código remove para compatibilidade.
 ```python
 # Gold: snapshot_date = D-1, estado as-of (<= snapshot_date), union+dedup para idempotência, is_current_snapshot e dataset final
-
+# CELL 2
 # Ler Silvers (DELTA)
 df_purchase_silver = spark.read.format("delta").load(PATH_SILVER_PURCHASE)
 df_product_item_silver = spark.read.format("delta").load(PATH_SILVER_PRODUCT_ITEM)
@@ -359,7 +166,7 @@ df_purchase_extra_info_silver = spark.read.format("delta").load(PATH_SILVER_EXTR
 df_snapshot_date = spark.sql("SELECT date_sub(current_date(), 1) AS snapshot_date").collect()[0]["snapshot_date"]
 print("snapshot_date (D-1):", df_snapshot_date)
 
-
+# CELL 3
 # -------------------------------------------------------------
 # GOLD GVM (nível de compra) - foto "as-of" snapshot_date
 # Para garantir reprodutibilidade e imutabilidade:
@@ -393,7 +200,7 @@ df_item_asof = (
 )
 
 # Extra info as-of (por purchase_id)
-w_extra = Window.partitionBy("purchase_id", "purchase_partition").orderBy(
+w_extra = Window.partitionBy("purchase_id").orderBy(
     col("transaction_date").desc(),
     col("transaction_datetime").desc()
 )
@@ -409,8 +216,8 @@ df_extra_asof = (
 df_purchase_asof = df_purchase_asof.filter(col("transaction_status") == "Succesfull")
 
 # Join assíncrono:
-# - se item ainda não chegou, purchase_value/item_quantity ficam null e a compra não entra no GMV -> somente para o caso que NUNCA chegou o dado, pois quando se tem do dia anterior é garantido pelos dataframes "as-of"
-# - se extra ainda não chegou, subsidiary fica null (vamos tratar como UNKNOWN na agregação) -> somente para o caso que NUNCA chegou o dado, pois quando se tem do dia anterior é garantido pelos dataframes "as-of"
+# - se item ainda não chegou, purchase_value/item_quantity ficam null e a compra não entra no GMV
+# - se extra ainda não chegou, subsidiary fica null (vamos tratar como UNKNOWN na agregação)
 df_new_gvm = (
     df_purchase_asof.alias("a")
     .join(df_item_asof.alias("b"), col("a.purchase_id") == col("b.purchase_id"), "left")
@@ -435,7 +242,7 @@ df_new_gvm = (
 
 df_new_gvm.show(truncate=False)
 
-
+# CELL 4
 # -------------------------------------------------------------
 # Persistência do GOLD GVM (DELTA) - idempotente por snapshot_date
 # Estratégia simples e compatível com o notebook original:
@@ -473,7 +280,7 @@ df_gold_final.write \
 df_gold_final.createOrReplaceTempView("gvm_gold")
 spark.sql("SELECT * FROM gvm_gold WHERE is_current_snapshot = true ORDER BY purchase_id").show(truncate=False)
 
-
+# CELL 5
 # -------------------------------------------------------------
 # DATASET FINAL (entregável): GMV diário por subsidiária
 # - regra GMV: sum(item_quantity * purchase_value)
@@ -500,64 +307,8 @@ df_gmv_daily.write \
     .save(PATH_GOLD_GMV)
 
 df_gmv_daily.show(truncate=False)
-
-
 ```
 
----------------
----------------
-#### Observação: Para produção é acosnelhavel utilizar merge para as tabelas silver e gold, mas sempre consolidar cada snapshot diário para garantir o requisito do exercício.
-
-(exemplo para tabela silver purchase abaixo):
-```python
-# dedup dentro do incremental
-w_evt = Window.partitionBy("purchase_id","transaction_datetime").orderBy(F.col("bronze_ingestion_date").desc())
-df_stage = df_stage.withColumn("rn", F.row_number().over(w_evt)).where("rn=1").drop("rn")
-
-# MERGE (upsert) na Silver por chave do evento
-if not DeltaTable.isDeltaTable(spark, SILVER_PATH):
-    df_stage.write.format("delta").mode("overwrite").partitionBy("transaction_date").save(SILVER_PATH)
-else:
-    t = DeltaTable.forPath(spark, SILVER_PATH)
-    cond = """
-      t.purchase_id = s.purchase_id
-      AND t.transaction_datetime = s.transaction_datetime
-    """
-    (t.alias("t")
-      .merge(df_stage.alias("s"), cond)
-      .whenMatchedUpdateAll()
-      .whenNotMatchedInsertAll()
-      .execute()
-    )
-
-```
----------------
----------------
-### Orquestração: Apache Airflow, step-functions, azure data factory...
-
-- Para exemplificar a orquestração vamos pensar na ferramenta open source Apache Airflow que funciona em todas as clouds seja por serviço gerenciado (mwaa) seja por deploy open source (em um kubernetes por exemplo).
-
-1. *Bronze:* A execução dos scripts que geram as tabelas bronze são independentes para atender o que foi dito tanto no video quanto no enunciado "as tabelas possuem atualização assíncrona e independentes uma das outras".
-2. *Silver:* A execução de cada tabela silver depende da sua bronze correspondente. Exemplo: o script `silver_purchase.ipynb` o trigger dele é o sucesso de processamento do script `bronze_purchase.ipynb`. E essa mesma lógica se aplica para as demais tabelas da camada Silver.
-3. *Gold:*  Já a tabela gold só executa quando todas as outras silvers estiverem com status de "up-to-date" seja com dado d-1 seja se nao rodou porquê nao chegou dado na bronze (requisito do desafio: se nao tiver dado novo, persistir os dados do dia anterior)
-
-- Exemplo de declaração de dependências entre tasks na DAG do airflow:
-A DAG exemplo (não testada por conta do tempo de teste para infra) está na pasta: ()[]
-```python
-    # ======================
-    # DEPENDÊNCIAS
-    # ======================
-    start >> [bronze_purchase, bronze_product_item, bronze_purchase_extra_info]
-
-    bronze_purchase >> check_bronze_purchase_d1 >> silver_purchase
-    bronze_product_item >> check_bronze_product_item_d1 >> silver_product_item
-    bronze_purchase_extra_info >> check_bronze_extra_d1 >> silver_purchase_extra_info
-
-    # Gold só depois que TODAS as silvers concluíram (success/skip)
-    [silver_purchase, silver_product_item, silver_purchase_extra_info] >> gold_gvm >> end
-```
----------------
----------------
 ### 3.4 DQ (Qualidade de Dados)
 ```python
 # Gold DQ: quarentena de compras faturadas sem item + métricas de qualidade por snapshot
@@ -614,8 +365,7 @@ df_dq_metrics.write.format("delta") \
     .save(DQ_PATH)
 ```
 
----------------
----------------
+---
 
 ## 4) Pré-requisitos do PDF — mapeamento explícito para o código
 
@@ -698,7 +448,7 @@ Isso impede que rodar novamente “mude” snapshots anteriores.
 ---
 
 ### (10) Recuperar registros correntes facilmente
-- Silver: `is_current_record` (registro corrente por PK)
+- Silver: `Is_current_record` (registro corrente por PK)
 - Gold: `is_current_snapshot` (snapshot corrente)
 
 **Onde:** Silver (coluna de corrente) + Gold (`is_current_snapshot`).
@@ -722,4 +472,10 @@ ORDER BY release_date, subsidiary;
 
 ---
 
+## 5) Entregáveis (Exercício 2)
 
+1) **ETL em Glue**: notebook `ETL-hotmart-completo.ipynb` (Bronze/Silver/Gold + DQ).  
+2) **Dataset final**: `s3://data-lake-case-hotmart/gold/gmv_daily_by_subsidiary` (Delta).  
+3) **Tabela de quarentena**: `s3://data-lake-case-hotmart/gold/quarantine_missing_items` (Delta).  
+4) **Métricas DQ**: `s3://data-lake-case-hotmart/gold/dq_gmv_run_metrics` (Delta).  
+5) **SQL de consumo**: query acima (corrente) + as-of (via snapshot_date).

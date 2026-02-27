@@ -185,7 +185,7 @@ ORDER BY release_date, subsidiary;
 | Deploy (PROPOSTO)| **GitHub** (repositório) + IaC opcional (Terraform/CDK) | Versionamento de notebooks, DAGs e DDLs | Reprodutibilidade, revisão e rastreabilidade de mudanças |
 
 
-**(extra) sql snapshot para "navegar no tempo" pelos snapshots consolidados da tabela
+**(extra)** sql snapshot para "navegar no tempo" pelos snapshots consolidados da tabela
 - Nesse caso "Olhando para janeiro de 2022 consolidado com o último snapshot"
 ```sql
 WITH last_snap AS (

@@ -115,12 +115,12 @@ Para ver o detalhamento do desenvolvimento, observe as seções após esta próx
 ---
 ## Entregáveis (Exercício 2)
 
-1) **ETL em Glue**: notebook `ETL-hotmart-completo.ipynb` (Bronze/Silver/Gold + DQ). 
+**1) ETL em Glue**: notebook `ETL-hotmart-completo.ipynb` (Bronze/Silver/Gold + DQ). 
 [ETL COMPLETO DEV/UAT](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/ETL-hotmart-completo.ipynb)
 
 **ETL Notebooks Separados Por Task (Airflow)**: [bronze/silver/gold](https://github.com/matheusbudin/analytics_engineer_hotmart/tree/main/Exercicio_2/etl_scripts)
 
-2) Create Table do dataset final - DDL:
+**2) Create Table do dataset final - DDL**:
 ```sql
 CREATE EXTERNAL TABLE default.gold_gvm (
   transaction_datetime timestamp,
@@ -145,14 +145,14 @@ LOCATION 's3://data-lake-case-hotmart/gold/gvm/'
 TBLPROPERTIES ('spark.sql.sources.provider'='delta');
 ```
 
-3) **Dataset final**: `s3://data-lake-case-hotmart/gold/gmv_daily_by_subsidiary` (Delta).  
+**3) Dataset final**: `s3://data-lake-case-hotmart/gold/gmv_daily_by_subsidiary` (Delta).  
 ![Dataset final populado](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_dataset_final.png)
 
-- query no athena:
+- **Query no athena**:
 
 ![query athena](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_query_athena_subsidiary_daily.png)
 
-4) Consulta SQL, em cima do dataset final, que retorna o GMV diário por subsidiária:
+**4) Consulta SQL, em cima do dataset final, que retorna o GMV diário por subsidiária:**
 ```sql
 SELECT
   release_date,
@@ -168,7 +168,7 @@ ORDER BY release_date, subsidiary;
 
 ![query entregável daily gmv Glue Spark](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/gold_gmv_daily_subsidiary.png)
 
-5) Descrição STACK utilizada e arquitetura:
+**5) Descrição STACK utilizada e arquitetura:**
 ## Tech Stack Utilizada (Exercício 2)
 
 | Camada / Item | Tecnologia | Onde entra na solução | Por que foi escolhida |
@@ -185,7 +185,7 @@ ORDER BY release_date, subsidiary;
 | Deploy (PROPOSTO)| **GitHub** (repositório) + IaC opcional (Terraform/CDK) | Versionamento de notebooks, DAGs e DDLs | Reprodutibilidade, revisão e rastreabilidade de mudanças |
 
 
-extra) sql snapshot para "navegar no tempo" pelos snapshots consolidados da tabela
+**(extra) sql snapshot para "navegar no tempo" pelos snapshots consolidados da tabela
 - Nesse caso "Olhando para janeiro de 2022 consolidado com o último snapshot"
 ```sql
 WITH last_snap AS (

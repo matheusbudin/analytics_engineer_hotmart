@@ -15,7 +15,7 @@ WITH purchases_2021 AS (
 )
 SELECT
     p.producer_id,
-    SUM(pi.purchase_value * pi_item_quantity) AS total_revenue
+    SUM(pi.purchase_value * pi.item_quantity) AS total_revenue
 FROM purchases_2021 p
 JOIN product_item pi
   ON pi.prod_item_id = p.prod_item_id

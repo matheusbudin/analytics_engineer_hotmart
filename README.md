@@ -135,6 +135,8 @@ CREATE EXTERNAL TABLE default.gold_gvm (
   purchase_value double,
   subsidiary string,
   snapshot_datetime timestamp,
+  snapshot_date date,
+  transaction_date date,
   is_current_snapshot boolean
 )
 PARTITIONED BY (

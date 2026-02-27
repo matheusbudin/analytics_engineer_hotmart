@@ -13,6 +13,8 @@ Responder às perguntas do Exercício 1 do PDF:
 - Receita/GMV calculada como **`purchase_value * item_quantity`**.
 - Join `purchase` ↔ `product_item` usa **chave composta** `prod_item_id + prod_item_partition`.
 
+- Diagrama de Entidade-Relacionamento (para chves join e schema):
+![Diagrama Entidade-Relacionamento](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/images/diagrama_entidade_relacionamento.png)
 ---
 
 ## `Quais são os 50 maiores produtores em faturamento ($) de 2021?`

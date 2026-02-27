@@ -116,6 +116,8 @@ Para ver o detalhamento do desenvolvimento, observe as seções após esta próx
 1) **ETL em Glue**: notebook `ETL-hotmart-completo.ipynb` (Bronze/Silver/Gold + DQ). 
 [ETL COMPLETO DEV/UAT](https://github.com/matheusbudin/analytics_engineer_hotmart/blob/main/Exercicio_2/ETL-hotmart-completo.ipynb)
 
+**ETL Notebooks Separados Por Task (Airflow)**: [bronze/silver/gold](https://github.com/matheusbudin/analytics_engineer_hotmart/tree/main/Exercicio_2/etl_scripts)
+
 2) Create Table do dataset final - DDL:
 ```sql
 CREATE EXTERNAL TABLE default.gold_gvm (

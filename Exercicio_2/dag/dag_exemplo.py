@@ -14,7 +14,7 @@ from airflow.providers.amazon.aws.operators.glue import AwsGlueJobOperator
 from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 
 
-# ========= CONFIG (ajuste para seu ambiente) =========
+# ========= CONFIG =========
 AWS_CONN_ID = "aws_default"
 BUCKET = "data-lake-case-hotmart"
 
@@ -26,7 +26,7 @@ BRONZE_PREFIX_BY_TABLE = {
     "purchase_extra_info": "data_lake/bronze/purchase_extra_info",
 }
 
-# Nomes dos Glue Jobs (um por notebook/camada). Ajuste para os seus.
+# Nomes dos Glue Jobs (um por notebook/camada)
 GLUE_JOBS = {
     "bronze_purchase": "bronze_purchase_job",
     "bronze_product_item": "bronze_product_item_job",
@@ -70,7 +70,7 @@ with DAG(
     schedule="0 6 * * *",  # todo dia 06:00
     catchup=False,
     max_active_runs=1,
-    tags=["hotmart", "case", "etl", "bronze-silver-gold"],
+    tags=["hotmart", "case", "etl", "bronze-silver-gold", "medallion"],
 ) as dag:
 
     # Airflow "ds" é o logical date (YYYY-MM-DD).
@@ -86,7 +86,7 @@ with DAG(
         task_id="bronze_purchase",
         job_name=GLUE_JOBS["bronze_purchase"],
         aws_conn_id=AWS_CONN_ID,
-        # Se você passar parâmetros pro job:
+        # se necessário passar parametros para o glue job:
         # script_args={"--RUN_DATE": SNAPSHOT_DATE}
     )
 

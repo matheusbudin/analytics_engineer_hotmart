@@ -347,7 +347,7 @@ purchase_window = Window.partitionBy("purchase_id").orderBy(col("transaction_dat
 df_purchase_silver_final = (
     df_silver_dedup
     .withColumn("rk", row_number().over(purchase_window))
-    .withColumn("is_current_record", col("rk") == 1)   # renomeado (antes: is_latest)
+    .withColumn("is_current_record", col("rk") == 1)   
     .drop("rk")
 )
 
